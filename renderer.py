@@ -301,13 +301,14 @@ class Renderer:
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         is_dome = props.renderModeEnum == 'DOME'
-        no_side_plane = props.GetNoSidePlane()
         h_fov = props.GetHFOV()
         v_fov = props.GetVFOV()
+        front_fov = props.GetFrontFOV()
+        ext_front_view = front_fov > pi/2
         render_fov = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(h_fov, v_fov)
         self.no_back_image = h_fov <= 3*pi/2
-        self.no_side_images = no_side_plane or (h_fov <= pi/2)
-        self.no_top_bottom_images = v_fov <= (h_fov if no_side_plane else pi/2)
+        self.no_side_images = h_fov <= front_fov
+        self.no_top_bottom_images = v_fov <= front_fov
         self.createdFiles = set()
         
         # Calcurate dimension
@@ -329,12 +330,12 @@ class Renderer:
         sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
         
-        base_angle = h_fov if no_side_plane else pi/2
+        base_angle = min(h_fov, front_fov)
         
         stitch_margin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
         margin = max(0.0, 0.5 * (tan(base_angle/2 + stitch_margin) - tan(base_angle/2)))
-        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if no_side_plane else 0.0
-        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if no_side_plane else 0.0
+        extrusion = max(0.0, 0.5 * tan(base_angle/2) - 0.5) if ext_front_view else 0.0
+        intrusion = max(0.0, 0.5 - 0.5 * tan(pi/2-base_angle/2)) if ext_front_view else 0.0
         if tbfrac - intrusion <= 0.0 or base_resolution[1]*(tbfrac-intrusion) < 1.0:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
@@ -348,7 +349,7 @@ class Renderer:
          + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
-         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or no_side_plane else '') + (blend_seam_front_v if vmargin > 0.0 or no_side_plane else '')))\
+         + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or ext_front_view else '') + (blend_seam_front_v if vmargin > 0.0 or ext_front_view else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
 
@@ -401,7 +402,7 @@ class Renderer:
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
-        fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
+        fb_angle = base_angle + 2 * stitch_margin
         def fscale(a):
             return int(ceil(a * f_scale))
         def nfscale(a):

@@ -177,9 +177,9 @@ class ToolPanel(Panel):
         col.prop(props, 'stitchMargin')
         col.prop(props, 'frontViewOverscan')
         col.prop(props, 'nonFrontViewReduction')
-        col = layout.column()
-        col.prop(props, 'noSidePlane')
-        col.enabled = props.IsEnableNoSidePlane()
+        if props.fovModeEnum == '180':
+            col = layout.column()
+            col.prop(props, 'FrontFOV')
         if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
             col = layout.column()
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
@@ -263,6 +263,18 @@ class Properties(bpy.types.PropertyGroup):
         description="Vertical Field of view in degrees",
     )
 
+    FrontFOV: bpy.props.FloatProperty(
+        name="Front View FOV",
+        subtype='ANGLE',
+        unit='ROTATION',
+        precision=0,
+        step=100,
+        default=radians(90),
+        min=radians(90),
+        max=radians(160),
+        description="Front Vieww's Field of view in degrees",
+    )
+
     stitchMargin: bpy.props.FloatProperty(
         name="Stitch Margin",
         subtype='ANGLE',
@@ -295,12 +307,6 @@ class Properties(bpy.types.PropertyGroup):
         min=0,
         max=99,
         description="Resolution Reduction Rate for Rendering expect Front View",
-    )
-
-    noSidePlane: bpy.props.BoolProperty(
-        name="No Side Plane",
-        default=False,
-        description="Not render side views. This is enable when Horizontal FOV under 160°",
     )
 
     isTopRightEye: bpy.props.BoolProperty(
@@ -337,11 +343,8 @@ class Properties(bpy.types.PropertyGroup):
     def GetVFOV(self) -> float:
         return self.snap_angle(self.VFOV)
 
-    def IsEnableNoSidePlane(self) -> bool:
-        return self.GetHFOV() < radians(165)
-
-    def GetNoSidePlane(self) -> bool:
-        return self.IsEnableNoSidePlane() and self.noSidePlane
+    def GetFrontFOV(self) -> float:
+        return self.snap_angle(self.FrontFOV) if self.fovModeEnum == '180' else radians(90)
 
     @classmethod
     def register(cls):
