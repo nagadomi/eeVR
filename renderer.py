@@ -2,9 +2,8 @@ import bpy
 import os
 import time
 import gpu
-import bgl
 import numpy as np
-from math import sin, cos, tan, atan, ceil, degrees, pi
+from math import sin, cos, tan, ceil, degrees, pi
 from datetime import datetime
 from gpu_extras.batch import batch_for_shader
 from typing import TYPE_CHECKING
@@ -91,22 +90,10 @@ vec2 to_uv_back(vec3 pt)
     return apply_margin(to_uv(pt.x/pt.z, -pt.y/pt.z));
 }
 
-float atan2(in float y, in float x)
+float atan2(float y, float x)
 {
     return x == 0.0 ? sign(y) * 0.5 * PI : atan(y, x);
 }
-
-// Input cubemap textures
-uniform sampler2D cubeLeftImage;
-uniform sampler2D cubeRightImage;
-uniform sampler2D cubeBottomImage;
-uniform sampler2D cubeTopImage;
-uniform sampler2D cubeBackImage;
-uniform sampler2D cubeFrontImage;
-
-in vec2 vTexCoord;
-
-out vec4 fragColor;
 
 void main() {
 '''
@@ -172,6 +159,7 @@ fetch_setup = '''
         angle += (tob + lor * (1 - near_horizon)) * (2 - abs(pt.z/pt.y)) * 0.25 * PI;
         if(angle > VCLIP*0.5) discard;
     }
+    fragColor = vec4(0.0);
 '''
 
 fetch_sides = '''
@@ -264,11 +252,6 @@ blend_seam_sides = '''
 
 # Define the vertex shader
 vertex_shader = '''
-in vec3 aVertexPosition;
-in vec2 aVertexTextureCoord;
-
-out vec2 vTexCoord;
-
 void main() {
     vTexCoord = aVertexTextureCoord;
     gl_Position = vec4(aVertexPosition, 1);
@@ -368,8 +351,24 @@ class Renderer:
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or no_side_plane else '') + (blend_seam_front_v if vmargin > 0.0 or no_side_plane else '')))\
          + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
-        self.shader = gpu.types.GPUShader(vertex_shader, frag_shader)
-        
+
+        shader_info = gpu.types.GPUShaderCreateInfo()
+        vert_out = gpu.types.GPUStageInterfaceInfo("eevr")
+        vert_out.smooth("VEC2", "vTexCoord")
+        shader_info.vertex_in(0, 'VEC3', "aVertexPosition")
+        shader_info.vertex_in(1, 'VEC2', "aVertexTextureCoord")
+        shader_info.vertex_out(vert_out)
+        shader_info.sampler(0, 'FLOAT_2D', "cubeLeftImage")
+        shader_info.sampler(1, 'FLOAT_2D', "cubeRightImage")
+        shader_info.sampler(2, 'FLOAT_2D', "cubeBottomImage")
+        shader_info.sampler(3, 'FLOAT_2D', "cubeTopImage")
+        shader_info.sampler(4, 'FLOAT_2D', "cubeBackImage")
+        shader_info.sampler(5, 'FLOAT_2D', "cubeFrontImage")
+        shader_info.fragment_out(0, 'VEC4', "fragColor")
+        shader_info.vertex_source(vertex_shader)
+        shader_info.fragment_source(frag_shader)
+        self.shader = gpu.shader.create_from_info(shader_info)
+
         # Set the image name to the current time
         self.start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         # get folder name from outside
@@ -414,6 +413,12 @@ class Renderer:
             self.view_format = self.scene.render.image_settings.views_format
             self.scene.render.image_settings.views_format = 'STEREO_3D'
             self.stereo_mode = self.scene.render.image_settings.stereo_3d_format.display_mode
+            if self.stereo_mode in ('SIDEBYSIDE', 'TOPBOTTOM'):
+                self.sidebyside = self.stereo_mode == 'SIDEBYSIDE'
+            else:
+                self.sidebyside = aspect_ratio < 1.5
+            props.trueTopBottom = self.stereo_mode == 'TOPBOTTOM'
+            self.use_sidebyside_crosseyed = self.scene.render.image_settings.stereo_3d_format.use_sidebyside_crosseyed
             self.scene.render.image_settings.stereo_3d_format.display_mode = 'TOPBOTTOM'
         
         self.direction_offsets = self.find_direction_offsets()
@@ -439,9 +444,11 @@ class Renderer:
         
         # Change the color space of all of the images to Linear
         # and load them into OpenGL textures
+        textures = []
         for image in imageList:
             image.colorspace_settings.name='Linear'
-            image.gl_load()
+            tex = gpu.texture.from_image(image)
+            textures.append(tex)
         
         # set the size of the final image
         width = self.image_size[0]
@@ -451,66 +458,44 @@ class Renderer:
         offscreen = gpu.types.GPUOffScreen(width, height)
 
         with offscreen.bind():
-            bgl.glClearColor(0.0, 0.0, 0.0, 1.0)
-            bgl.glClear(bgl.GL_COLOR_BUFFER_BIT)
-
+            fb = gpu.state.active_framebuffer_get()
+            fb.clear(color=(0.0, 0.0, 0.0, 0.0))
             self.shader.bind()
-            
-            def bind_and_filter(tex, bindcode, image=None, imageNum=None):
-                bgl.glActiveTexture(tex)
-                bgl.glBindTexture(bgl.GL_TEXTURE_2D, bindcode)
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR)
-                bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR)
-                bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_EDGE)
-                bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_EDGE)
-                if image!=None and imageNum!=None:
-                    try:
-                        self.shader.uniform_int(image, imageNum)
-                    except ValueError as err:
-                        print(f"eeVR : WARING : {err}")
-            
-            # Bind all of the cubemap textures and enable correct filtering and wrapping
-            # to prevent seams
-            bind_and_filter(bgl.GL_TEXTURE0, imageList[0].bindcode, "cubeFrontImage", 0)
+
+            self.shader.uniform_sampler("cubeFrontImage", textures[0])
             if self.no_side_images:
                 if not self.no_top_bottom_images:
-                    bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBottomImage", 1)
-                    bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeTopImage", 2)
+                    self.shader.uniform_sampler("cubeBottomImage", textures[1])
+                    self.shader.uniform_sampler("cubeTopImage", textures[2])
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
+                        self.shader.uniform_sampler("cubeBackImage", textures[3])
                 else:
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeBackImage", 1) # for development purpose
+                        self.shader.uniform_sampler("cubeBackImage", textures[1]) # for development purpose
             else:
-                bind_and_filter(bgl.GL_TEXTURE1, imageList[1].bindcode, "cubeLeftImage", 1)
-                bind_and_filter(bgl.GL_TEXTURE2, imageList[2].bindcode, "cubeRightImage", 2)
+                self.shader.uniform_sampler("cubeLeftImage", textures[1])
+                self.shader.uniform_sampler("cubeRightImage", textures[2])
                 if not self.no_top_bottom_images:
-                    bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBottomImage", 3)
-                    bind_and_filter(bgl.GL_TEXTURE4, imageList[4].bindcode, "cubeTopImage", 4)
+                    self.shader.uniform_sampler("cubeBottomImage", textures[3])
+                    self.shader.uniform_sampler("cubeTopImage", textures[4])
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE5, imageList[5].bindcode, "cubeBackImage", 5)
+                        self.shader.uniform_sampler("cubeBackImage", textures[5])
                 else:
                     if not self.no_back_image:
-                        bind_and_filter(bgl.GL_TEXTURE3, imageList[3].bindcode, "cubeBackImage", 3)
+                        self.shader.uniform_sampler("cubeBackImage", textures[3])
             
-            # Bind the resulting texture
-            bind_and_filter(bgl.GL_TEXTURE6, offscreen.color_texture)
-
             # Render the image
             batch.draw(self.shader)
 
-            # Unload the textures
-            for image in imageList:
-                image.gl_free()
-            
             # Read the resulting pixels into a buffer
-            buffer = bgl.Buffer(bgl.GL_FLOAT, width * height * 4)
-            bgl.glGetTexImage(bgl.GL_TEXTURE_2D, 0, bgl.GL_RGBA, bgl.GL_FLOAT, buffer)
+            buffer = fb.read_color(0, 0, width, height, 4, 0, 'FLOAT')
+            buffer.dimensions = width * height * 4
 
         # Unload the offscreen texture
         offscreen.free()
         
         # Remove the cubemap textures:
+        del textures
         for image in imageList:
             bpy.data.images.remove(image)
         
@@ -589,7 +574,7 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        if not context.preferences.addons['eeVR'].preferences.remain_temporaries:
+        if not context.preferences.addons[__package__].preferences.remain_temporaries:
             for filename in self.createdFiles:
                 os.remove(filename)
         self.createdFiles.clear()
@@ -733,19 +718,22 @@ class Renderer:
                 imageResult = bpy.data.images.new(image_name, leftImage.size[0], 2 * leftImage.size[1])
             
             imageResult = bpy.data.images[image_name]
-            if self.stereo_mode == 'SIDEBYSIDE':
+            img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
+            leftImage.pixels.foreach_get(img1arr.ravel())
+            img2arr = np.empty((rightImage.size[1], 4 * rightImage.size[0]), dtype=np.float32)
+            rightImage.pixels.foreach_get(img2arr.ravel())
+            if self.sidebyside:
                 imageResult.scale(2*leftImage.size[0], leftImage.size[1])
-                img2arr = np.empty((rightImage.size[1], 4 * rightImage.size[0]), dtype=np.float32)
-                rightImage.pixels.foreach_get(img2arr.ravel())
-                img1arr = np.empty((leftImage.size[1], 4 * leftImage.size[0]), dtype=np.float32)
-                leftImage.pixels.foreach_get(img1arr.ravel())
-                imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr), axis=1).ravel())
+                if self.use_sidebyside_crosseyed:
+                    imageResult.pixels.foreach_set(np.concatenate((img1arr, img2arr), axis=1).ravel())
+                else:
+                    imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr), axis=1).ravel())
             else:
                 imageResult.scale(leftImage.size[0], 2*leftImage.size[1])
-                buff = np.empty((leftImage.size[0] * 2 * leftImage.size[1] * 4,), dtype=np.float32)
-                rightImage.pixels.foreach_get(buff[:buff.shape[0]//2].ravel())
-                leftImage.pixels.foreach_get(buff[buff.shape[0]//2:].ravel())
-                imageResult.pixels.foreach_set(buff.ravel())
+                if self.scene.eeVR.isTopRightEye:
+                    imageResult.pixels.foreach_set(np.concatenate((img2arr, img1arr)).ravel())
+                else:
+                    imageResult.pixels.foreach_set(np.concatenate((img1arr, img2arr)).ravel())
             bpy.data.images.remove(leftImage)
             bpy.data.images.remove(rightImage)
 
@@ -753,8 +741,8 @@ class Renderer:
             imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
         
         save_start_time = time.time()
+        # Color Management Settings issue solved by nagadomi
         if self.is_animation:
-            # Color Management Settings issue solved by nagadomi
             imageResult.file_format = self.fformat
             imageResult.filepath_raw = self.path+self.folder_name+image_name
             imageResult.save()

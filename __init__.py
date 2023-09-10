@@ -182,6 +182,9 @@ class ToolPanel(Panel):
         if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
             col = layout.column()
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
+        if context.scene.render.use_multiview and (context.scene.render.image_settings.stereo_3d_format.display_mode == 'TOPBOTTOM') if props.cancel else props.trueTopBottom:
+            col = layout.column()
+            col.prop(props, 'isTopRightEye')
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
@@ -286,6 +289,17 @@ class Properties(bpy.types.PropertyGroup):
         name="No Side Plane",
         default=False,
         description="Not render side views. This is enable when Horizontal FOV under 160°",
+    )
+
+    isTopRightEye: bpy.props.BoolProperty(
+        description="If it is on, right eye image will be placed as top image. default is false.",
+        default=False,
+        name="Top is RightEye",
+    )
+
+    trueTopBottom: bpy.props.BoolProperty(
+        name="TrueTopBottom",
+        default=False
     )
 
     cancel: bpy.props.BoolProperty(
