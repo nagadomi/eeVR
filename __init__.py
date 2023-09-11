@@ -272,7 +272,7 @@ class Properties(bpy.types.PropertyGroup):
         default=radians(90),
         min=radians(90),
         max=radians(160),
-        description="Front Vieww's Field of view in degrees",
+        description="Front View's Field of view in degrees",
     )
 
     stitchMargin: bpy.props.FloatProperty(
