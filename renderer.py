@@ -300,17 +300,17 @@ class Renderer:
         self.path = bpy.path.abspath("//")
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
-        is_dome = (props.renderModeEnum == 'DOME')
+        is_dome = props.renderModeEnum == 'DOME'
         no_side_plane = props.GetNoSidePlane()
         h_fov = props.GetHFOV()
         v_fov = props.GetVFOV()
         render_fov = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(h_fov, v_fov)
-        self.no_back_image = (h_fov <= 3*pi/2)
+        self.no_back_image = h_fov <= 3*pi/2
         self.no_side_images = no_side_plane or (h_fov <= pi/2)
-        self.no_top_bottom_images = (v_fov <= (h_fov if no_side_plane else pi/2))
+        self.no_top_bottom_images = v_fov <= (h_fov if no_side_plane else pi/2)
         self.createdFiles = set()
         
-        # Calcurate dimension        
+        # Calcurate dimension
         self.resolution_x_origin = self.scene.render.resolution_x
         self.resolution_y_origin = self.scene.render.resolution_y
         self.pixel_aspect_x_origin = self.scene.render.pixel_aspect_x
@@ -394,20 +394,25 @@ class Renderer:
 
         # setup render targets information
         aspect_ratio = base_resolution[0] / base_resolution[1]
+        f_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
+        nf_scale = max(0.01, 1.0 - props.nonFrontViewReduction / 100.0)
         tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
         side_resolution = trans_resolution(base_resolution, sidefrac, 1, 0, vmargin)
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = (base_angle if no_side_plane else pi/2) + 2 * stitch_margin
-        f_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
+        def fscale(a):
+            return int(ceil(a * f_scale))
+        def nfscale(a):
+            return int(ceil(a * nf_scale))
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, tb_resolution[0], tb_resolution[1], aspect_ratio),
-            'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
-            'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
-            'front': (0.0, 0.0, fb_angle, int(ceil(fb_resolution[0] * f_scale)), int(ceil(fb_resolution[1] * f_scale)), aspect_ratio),
-            'back': (0.0, 0.0, fb_angle, fb_resolution[0], fb_resolution[1], aspect_ratio)
+            'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
+            'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
+            'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
+            'front': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio),
+            'back': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio)
         }
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format

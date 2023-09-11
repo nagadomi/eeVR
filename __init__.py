@@ -22,8 +22,8 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 5, 2),
-    "blender": (3, 0, 0),
+    "version": (0, 9, 0),
+    "blender": (3, 6, 0),
     "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
@@ -176,6 +176,7 @@ class ToolPanel(Panel):
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
         col.prop(props, 'frontViewOverscan')
+        col.prop(props, 'nonFrontViewReduction')
         col = layout.column()
         col.prop(props, 'noSidePlane')
         col.enabled = props.IsEnableNoSidePlane()
@@ -283,6 +284,17 @@ class Properties(bpy.types.PropertyGroup):
         min=0,
         max=100,
         description="Overscan Rate for Front View Rendering",
+    )
+
+    nonFrontViewReduction: bpy.props.FloatProperty(
+        name="Non-Front View Reduction",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=50,
+        min=0,
+        max=99,
+        description="Resolution Reduction Rate for Rendering expect Front View",
     )
 
     noSidePlane: bpy.props.BoolProperty(
