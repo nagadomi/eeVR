@@ -29,11 +29,12 @@ The resolution is calculated so that the angle of view of each camera (front, ba
 The resolution can be increased by this amount only for the frontal rendering to compensate for the lack of resolution.
 
 The default setting of 25% almost eliminates the lack of resolution in the center of the image, but it results in excessive resolution on the periphery.
+
 This means that rendering will take more time.
 
 ### Non-Front View Resolution Reduction
 
-To reduce rendering time, you can specify the reduction percentage of the rendering resolution for views other than the front view.
+To reduce rendering time, you can specify the reduction percentage of the rendering resolution for views other than the front view, where their importance is lower.
 
 You can set it from 0% (no reduction) to a maximum of 99% reduction.
 
