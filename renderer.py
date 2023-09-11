@@ -412,7 +412,7 @@ class Renderer:
             'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
             'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio),
-            'back': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio)
+            'back': (0.0, 0.0, fb_angle, nfscale(fb_resolution[0]), nfscale(fb_resolution[1]), aspect_ratio)
         }
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
