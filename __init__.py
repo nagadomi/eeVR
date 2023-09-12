@@ -175,13 +175,17 @@ class ToolPanel(Panel):
             col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
         col.prop(props, 'stitchMargin')
-        col.prop(props, 'frontViewOverscan')
-        col.prop(props, 'nonFrontViewReduction')
+        col.prop(props, 'frontViewResolution')
+        col.prop(props, 'sideViewResolution')
+        col.prop(props, 'topViewResolution')
+        col.prop(props, 'bottomViewResolution')
+        col.prop(props, 'rearViewResolution')
         if props.fovModeEnum == '180':
             col = layout.column()
-            col.prop(props, 'FrontFOV')
+            col.prop(props, 'frontFOV')
         if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
             col = layout.column()
+            col.prop(props, 'appliesParallaxForSideAndBack')
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
         if context.scene.render.use_multiview and (context.scene.render.image_settings.stereo_3d_format.display_mode == 'TOPBOTTOM') if props.cancel else props.trueTopBottom:
             col = layout.column()
@@ -263,7 +267,7 @@ class Properties(bpy.types.PropertyGroup):
         description="Vertical Field of view in degrees",
     )
 
-    FrontFOV: bpy.props.FloatProperty(
+    frontFOV: bpy.props.FloatProperty(
         name="Front View FOV",
         subtype='ANGLE',
         unit='ROTATION',
@@ -287,26 +291,66 @@ class Properties(bpy.types.PropertyGroup):
         description="Margin for Seam Blending in degrees",
     )
 
-    frontViewOverscan: bpy.props.FloatProperty(
-        name="Front View Overscan",
+    frontViewResolution: bpy.props.FloatProperty(
+        name="Front View Resolution Scale",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
-        default=25,
-        min=0,
-        max=100,
-        description="Overscan Rate for Front View Rendering",
+        default=125,
+        min=1,
+        max=200,
+        description="Overscan/Reduction Rate for Front View Rendering",
     )
 
-    nonFrontViewReduction: bpy.props.FloatProperty(
-        name="Non-Front View Reduction",
+    sideViewResolution: bpy.props.FloatProperty(
+        name="Side View Resolution Scale",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
-        default=50,
-        min=0,
-        max=99,
-        description="Resolution Reduction Rate for Rendering expect Front View",
+        default=100,
+        min=1,
+        max=200,
+        description="Overscan/Reduction Rate for Side View Rendering",
+    )
+
+    topViewResolution: bpy.props.FloatProperty(
+        name="Top View Resolution Scale",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=100,
+        min=1,
+        max=200,
+        description="Overscan/Reduction Rate for Top View Rendering",
+    )
+
+    bottomViewResolution: bpy.props.FloatProperty(
+        name="Bottom View Resolution Scale",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=100,
+        min=1,
+        max=200,
+        description="Overscan/Reduction Rate for Bottom View Rendering",
+    )
+
+    rearViewResolution: bpy.props.FloatProperty(
+        name="Rear View Resolution Scale",
+        subtype='PERCENTAGE',
+        precision=0,
+        step=100,
+        default=100,
+        min=1,
+        max=200,
+        description="Overscan/Reduction Rate for Rear View Rendering",
+    )
+
+    appliesParallaxForSideAndBack: bpy.props.BoolProperty(
+        description="If it is on, it allows for noticeable seams or blending artifacts in side and rear views to introduce collect parallax"\
+         " at over HFOV 180 rendering. default is false.",
+        default=False,
+        name="Apply Parallax for side and rear view",
     )
 
     isTopRightEye: bpy.props.BoolProperty(
@@ -344,7 +388,7 @@ class Properties(bpy.types.PropertyGroup):
         return self.snap_angle(self.VFOV)
 
     def GetFrontFOV(self) -> float:
-        return self.snap_angle(self.FrontFOV) if self.fovModeEnum == '180' else radians(90)
+        return self.snap_angle(self.frontFOV) if self.fovModeEnum == '180' else radians(90)
 
     @classmethod
     def register(cls):
