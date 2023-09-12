@@ -397,8 +397,8 @@ class Renderer:
         nf_scale = max(0.01, 1.0 - props.nonFrontViewReduction / 100.0)
         tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
         side_resolution = trans_resolution(base_resolution, sidefrac-intrusion, 1, 0, smargin)
-        side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
-        side_shift_scale = 1 / (1 + 2 * vmargin)
+        side_angle = pi/2 + ((2 * stitch_margin) if smargin > 0.0 else 0.0)
+        side_shift_scale = 1 / (1 + 2 * smargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
         fb_angle = base_angle + 2 * stitch_margin
         def fscale(a):
