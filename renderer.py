@@ -255,11 +255,6 @@ void main() {
 }
 '''
 
-
-def trans_resolution(src, hscale, vscale, hmargin, vmargin):
-    return int(ceil(src[0] * hscale + 2 * hmargin * src[0])), int(ceil(src[1] * vscale + 2 * vmargin * src[1]))
-
-
 class Renderer:
     
     def __init__(self, context, is_animation = False, folder = ''):
@@ -306,6 +301,8 @@ class Renderer:
         self.no_back_image = h_fov <= 3*pi/2
         self.no_side_images = h_fov <= front_fov
         self.no_top_bottom_images = v_fov <= front_fov
+        self.seamless = not (context.scene.render.use_multiview and h_fov > pi and props.appliesParallaxForSideAndBack)
+
         self.createdFiles = set()
         
         # Calcurate dimension
@@ -338,15 +335,14 @@ class Renderer:
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
         smargin = 0.0 if self.no_side_images or not vmargin > 0.0 else max(0.0, 0.5 * (tan(pi/4 + stitch_margin) - tan(pi/4)))
-        print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} smargin:{smargin} extrusion:{extrusion} intrusion:{intrusion}")
-        print(f"HTEXSCALE:{1 / (1 + 2 * (extrusion + hmargin))} VTEXSCALE:{1 / (1 + 2 * (extrusion + vmargin))}")
+        # print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} smargin:{smargin} extrusion:{extrusion} intrusion:{intrusion}")
+        # print(f"HTEXSCALE:{1 / (1 + 2 * (extrusion + hmargin))} VTEXSCALE:{1 / (1 + 2 * (extrusion + vmargin))}")
         frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, smargin, extrusion, intrusion))\
          + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
-         + ('' if self.no_side_images else fetch_sides)\
-         + ('' if self.no_side_images or not vmargin > 0.0 or True else blend_seam_sides)\
+         + ('' if self.no_side_images else fetch_sides + (blend_seam_sides if vmargin > 0.0 else ''))\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or ext_front_view else '') + (blend_seam_front_v if vmargin > 0.0 or ext_front_view else '')))\
          + '}'
@@ -393,26 +389,30 @@ class Renderer:
 
         # setup render targets information
         aspect_ratio = base_resolution[0] / base_resolution[1]
-        f_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
-        nf_scale = max(0.01, 1.0 - props.nonFrontViewReduction / 100.0)
-        tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
-        side_resolution = trans_resolution(base_resolution, sidefrac-intrusion, 1, 0, smargin)
+
+        def make_resolution(src, hscale, vscale, hmargin, vmargin, scale):
+            return int(ceil((src[0] * hscale + 2 * hmargin * src[0]) * scale)),\
+                int(ceil((src[1] * vscale + 2 * vmargin * src[1]) * scale))
+
+        f_resolution = make_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin, props.frontViewResolution / 100.0)
+        b_resolution = make_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin, props.rearViewResolution / 100.0)
+        side_resolution = make_resolution(base_resolution, sidefrac-intrusion, 1, 0, smargin, props.sideViewResolution / 100.0)
+        top_resolution = make_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0, props.topViewResolution / 100.0)
+        bot_resolution = make_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0, props.bottomViewResolution / 100.0)
+
+        fb_angle = base_angle + 2 * stitch_margin
         side_angle = pi/2 + ((2 * stitch_margin) if smargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * smargin)
-        fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
-        fb_angle = base_angle + 2 * stitch_margin
-        def fscale(a):
-            return int(ceil(a * f_scale))
-        def nfscale(a):
-            return int(ceil(a * nf_scale))
+
         self.camera_settings = {
-            'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
-            'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
-            'right': (0.5*(sidefrac-1+intrusion)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
-            'left': (0.5*(1-sidefrac-intrusion)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
-            'front': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio),
-            'back': (0.0, 0.0, fb_angle, nfscale(fb_resolution[0]), nfscale(fb_resolution[1]), aspect_ratio)
+            'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, top_resolution[0], top_resolution[1], aspect_ratio),
+            'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, bot_resolution[0], bot_resolution[1], aspect_ratio),
+            'right': (0.5*(sidefrac-1+intrusion)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'left': (0.5*(1-sidefrac-intrusion)*side_shift_scale, 0.0, side_angle, side_resolution[0], side_resolution[1], aspect_ratio),
+            'front': (0.0, 0.0, fb_angle, f_resolution[0], f_resolution[1], aspect_ratio),
+            'back': (0.0, 0.0, fb_angle, b_resolution[0], b_resolution[1], aspect_ratio)
         }
+
         if self.is_stereo:
             self.view_format = self.scene.render.image_settings.views_format
             self.scene.render.image_settings.views_format = 'STEREO_3D'
@@ -569,7 +569,9 @@ class Renderer:
         # Reset all the variables that were changed
         context.view_layer.objects.active = self.viewlayer_active_object_origin
         context.scene.camera = self.camera_origin
+        camera = self.camera.data
         bpy.data.objects.remove(self.camera)
+        bpy.data.cameras.remove(camera)
         self.scene.render.resolution_x = self.resolution_x_origin
         self.scene.render.resolution_y = self.resolution_y_origin
         self.scene.render.pixel_aspect_x = self.pixel_aspect_x_origin
@@ -594,12 +596,12 @@ class Renderer:
         tmp = self.scene.render.filepath
         
         # If rendering for VR, render the side images separately to avoid seams
-        if self.is_stereo and direction in {'right', 'left'}:
+        if self.is_stereo and self.seamless and direction in {'right', 'left'}:
             if nameL in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[nameL])
             if nameR in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[nameR])
-            
+
             self.scene.render.use_multiview = False
             tmp_loc = list(self.camera.location)
             camera_angle = self.direction_offsets['front'][2]
@@ -646,7 +648,7 @@ class Renderer:
             # Split the render into two images
             buff = np.empty((imageLen,), dtype=np.float32)
             renderedImage.pixels.foreach_get(buff)
-            if direction == 'back':
+            if self.seamless and direction == 'back':
                 renderedImageL.pixels.foreach_set(buff[imageLen//2:])
                 renderedImageR.pixels.foreach_set(buff[:imageLen//2])
             else:
@@ -745,8 +747,8 @@ class Renderer:
             imageResult = self.cubemap_to_panorama(imageList, "RenderResult")
         
         save_start_time = time.time()
-        # Color Management Settings issue solved by nagadomi
         if self.is_animation:
+            # Color Management Settings issue solved by nagadomi
             imageResult.file_format = self.fformat
             imageResult.filepath_raw = self.path+self.folder_name+image_name
             imageResult.save()
