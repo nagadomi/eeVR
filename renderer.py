@@ -12,21 +12,22 @@ if TYPE_CHECKING:
 
 # Define parts of fragment shader 
 commdef = '''
-#define PI        3.1415926535897932384626
-#define FOVFRAC   %f
-#define SIDEFRAC  %f
-#define TBFRAC    %f
-#define HCLIP     %f
-#define VCLIP     %f
-#define HMARGIN   %f
-#define VMARGIN   %f
-#define EXTRUSION %f
-#define INTRUSION %f
+#define PI          3.1415926535897932384626
+#define FOVFRAC     %f
+#define SIDEFRAC    %f
+#define TBFRAC      %f
+#define HCLIP       %f
+#define VCLIP       %f
+#define HMARGIN     %f
+#define VMARGIN     %f
+#define EXTRUSION   %f
+#define INTRUSION   %f
 
-const float INVSIDEFRAC = 1 / SIDEFRAC;
-const float TBHTEXSCALE = 1 / (TBFRAC - INTRUSION);
-const float HTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * HMARGIN);
-const float VTEXSCALE = 1 / (1 + 2 * EXTRUSION + 2 * VMARGIN);
+const float SIDEHTEXSCALE = 1 / (SIDEFRAC - INTRUSION);
+const float SIDEVTEXSCALE = 1 / (1 + 2 * (VMARGIN - INTRUSION));
+const float TBVTEXSCALE   = 1 / (TBFRAC - INTRUSION);
+const float HTEXSCALE     = 1 / (1 + 2 * (HMARGIN + EXTRUSION));
+const float VTEXSCALE     = 1 / (1 + 2 * (VMARGIN + EXTRUSION));
 const float ACTUALHMARGIN = HMARGIN * HTEXSCALE;
 const float ACTUALVMARGIN = VMARGIN * VTEXSCALE;
 
@@ -50,29 +51,24 @@ vec2 to_uv(float x, float y)
     return tr(vec2(x, y), 1.0, 0.5);
 }
 
-vec2 apply_side_margin(vec2 src)
-{
-    return tr(src, vec2(0, VMARGIN), vec2(1, VTEXSCALE));
-}
-
 vec2 to_uv_right(vec3 pt)
 {
-    return apply_side_margin(to_uv(-pt.z/pt.x, pt.y/pt.x) * vec2(INVSIDEFRAC, 1));
+    return tr(to_uv(-pt.z/pt.x, pt.y/pt.x), vec2(-INTRUSION, VMARGIN - INTRUSION), vec2(SIDEHTEXSCALE, SIDEVTEXSCALE));
 }
 
 vec2 to_uv_left(vec3 pt)
 {
-    return apply_side_margin(tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, 0), vec2(INVSIDEFRAC, 1)));
+    return tr(to_uv(-pt.z/pt.x, -pt.y/pt.x), vec2(SIDEFRAC - 1, VMARGIN - INTRUSION), vec2(SIDEHTEXSCALE, SIDEVTEXSCALE));
 }
 
 vec2 to_uv_top(vec3 pt)
 {
-    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION), vec2(1, TBHTEXSCALE));
+    return tr(to_uv(pt.x/pt.y, -pt.z/pt.y), vec2(0, -INTRUSION), vec2(1, TBVTEXSCALE));
 }
 
 vec2 to_uv_bottom(vec3 pt)
 {
-    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, TBHTEXSCALE));
+    return tr(to_uv(-pt.x/pt.y, -pt.z/pt.y), vec2(0, TBFRAC - 1), vec2(1, TBVTEXSCALE));
 }
 
 vec2 apply_margin(vec2 src)
@@ -162,6 +158,11 @@ fetch_setup = '''
     fragColor = vec4(0.0);
 '''
 
+fetch_top_bottom = '''
+    fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
+    fragColor += tob * (1 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
+'''
+
 fetch_sides = '''
     vec2 right_uv = to_uv_right(pt);
     fragColor += lor * right * texture(cubeRightImage, right_uv);
@@ -169,9 +170,22 @@ fetch_sides = '''
     fragColor += lor * (1 - right) * texture(cubeLeftImage, left_uv);
 '''
 
-fetch_top_bottom = '''
-    fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
-    fragColor += tob * (1 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
+blend_seam_sides = '''
+    {
+        float range = over45 * (1 - over135);
+        
+        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
+
+        alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / ACTUALVMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
+
+        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
+
+        alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / ACTUALVMARGIN, 0.0, 1.0));
+        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
+    }
 '''
 
 fetch_back = '''
@@ -230,24 +244,6 @@ blend_seam_back_v = '''
             alpha = (1 - front) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(uv.y / ACTUALVMARGIN, 0.0, 1.0));
             fragColor = mix(fragColor, texture(cubeBackImage, uv), alpha);
         }
-'''
-
-blend_seam_sides = '''
-    {
-        float range = over45 * (1 - over135);
-        
-        float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
-        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
-
-        alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / ACTUALVMARGIN, 0.0, 1.0));
-        fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
-
-        alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
-        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
-
-        alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / ACTUALVMARGIN, 0.0, 1.0));
-        fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
-    }
 '''
 
 # Define the vertex shader
@@ -340,17 +336,17 @@ class Renderer:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        # print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
-        # print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
+        print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} extrusion:{extrusion} intrusion:{intrusion}")
+        print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
         frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, extrusion, intrusion))\
          + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
-         + ('' if self.no_side_images else fetch_sides)\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
+         + ('' if self.no_side_images else fetch_sides)\
+         + ('' if self.no_side_images and vmargin > 0.0 and False else '')\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or ext_front_view else '') + (blend_seam_front_v if vmargin > 0.0 or ext_front_view else '')))\
-         + (blend_seam_sides if not self.no_side_images and vmargin > 0.0 else '')\
          + '}'
 
         shader_info = gpu.types.GPUShaderCreateInfo()
@@ -410,8 +406,8 @@ class Renderer:
         self.camera_settings = {
             'top': (0.0, 0.5*(tbfrac-1+intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
             'bottom': (0.0, 0.5*(1-tbfrac-intrusion), pi/2, nfscale(tb_resolution[0]), nfscale(tb_resolution[1]), aspect_ratio),
-            'right': (0.5*(sidefrac-1)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
-            'left': (0.5*(1-sidefrac)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
+            'right': (0.5*(sidefrac-1+intrusion)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
+            'left': (0.5*(1-sidefrac-intrusion)*side_shift_scale, 0.0, side_angle, nfscale(side_resolution[0]), nfscale(side_resolution[1]), aspect_ratio),
             'front': (0.0, 0.0, fb_angle, fscale(fb_resolution[0]), fscale(fb_resolution[1]), aspect_ratio),
             'back': (0.0, 0.0, fb_angle, nfscale(fb_resolution[0]), nfscale(fb_resolution[1]), aspect_ratio)
         }
