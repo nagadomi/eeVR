@@ -346,7 +346,7 @@ class Renderer:
          + fetch_setup\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_side_images else fetch_sides)\
-         + ('' if self.no_side_images and vmargin > 0.0 and False else '')\
+         + ('' if self.no_side_images and vmargin > 0.0 or True else blend_seam_sides)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or ext_front_view else '') + (blend_seam_front_v if vmargin > 0.0 or ext_front_view else '')))\
          + '}'
