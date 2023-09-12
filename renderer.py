@@ -337,16 +337,16 @@ class Renderer:
             self.no_top_bottom_images = True
         hmargin = 0.0 if self.no_side_images else margin
         vmargin = 0.0 if self.no_top_bottom_images else margin
-        smargin = 0.0 if self.no_side_images else max(0.0, 0.5 * (tan(pi/4 + stitch_margin) - tan(pi/4)))
+        smargin = 0.0 if self.no_side_images or not vmargin > 0.0 else max(0.0, 0.5 * (tan(pi/4 + stitch_margin) - tan(pi/4)))
         print(f"stichAngle {stitch_margin} margin:{margin} hmargin:{hmargin} vmargin:{vmargin} smargin:{smargin} extrusion:{extrusion} intrusion:{intrusion}")
-        print(f"HTEXSCALE:{1 / (1 + 2 * extrusion + 2 * hmargin)} VTEXSCALE:{1 / (1 + 2 * extrusion + 2 * vmargin)}")
+        print(f"HTEXSCALE:{1 / (1 + 2 * (extrusion + hmargin))} VTEXSCALE:{1 / (1 + 2 * (extrusion + vmargin))}")
         frag_shader = \
            (commdef % (fovfrac, sidefrac, tbfrac, h_fov, v_fov, hmargin, vmargin, smargin, extrusion, intrusion))\
          + (dome % domemodes[int(props.domeMethodEnum)] if is_dome else equi)\
          + fetch_setup\
          + ('' if self.no_top_bottom_images else fetch_top_bottom)\
          + ('' if self.no_side_images else fetch_sides)\
-         + ('' if self.no_side_images and vmargin > 0.0 or True else blend_seam_sides)\
+         + ('' if self.no_side_images or not vmargin > 0.0 or True else blend_seam_sides)\
          + ('' if self.no_back_image else (fetch_back % ((blend_seam_back_h if hmargin > 0.0 else '') + (blend_seam_back_v if vmargin > 0.0 else ''))))\
          + (fetch_front % ((blend_seam_front_h if hmargin > 0.0 or ext_front_view else '') + (blend_seam_front_v if vmargin > 0.0 or ext_front_view else '')))\
          + '}'
@@ -396,7 +396,7 @@ class Renderer:
         f_scale = 1.0 + max(0.0, props.frontViewOverscan / 100.0)
         nf_scale = max(0.01, 1.0 - props.nonFrontViewReduction / 100.0)
         tb_resolution = trans_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0)
-        side_resolution = trans_resolution(base_resolution, sidefrac-intrusion, 1, 0, vmargin)
+        side_resolution = trans_resolution(base_resolution, sidefrac-intrusion, 1, 0, smargin)
         side_angle = pi/2 + ((2 * stitch_margin) if vmargin > 0.0 else 0.0)
         side_shift_scale = 1 / (1 + 2 * vmargin)
         fb_resolution = trans_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin)
