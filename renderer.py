@@ -595,13 +595,13 @@ class Renderer:
         if self.is_stereo:
             nameL = name + '_L'
             nameR = name + '_R'
-        
+            if nameL in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameL])
+            if nameR in bpy.data.images:
+                bpy.data.images.remove(bpy.data.images[nameR])
+
             # If rendering for VR, render the side images separately to avoid seams
             if self.seamless and direction in {'right', 'left'}:
-                if nameL in bpy.data.images:
-                    bpy.data.images.remove(bpy.data.images[nameL])
-                if nameR in bpy.data.images:
-                    bpy.data.images.remove(bpy.data.images[nameR])
 
                 self.scene.render.use_multiview = False
                 tmp_loc = list(self.camera.location)
