@@ -181,9 +181,11 @@ class ToolPanel(Panel):
                 col.label(icon='ERROR', text=f"clips to {degrees(max_fov):3.0f}°")
         col.prop(props, 'stitchMargin')
         col.prop(props, 'frontViewResolution')
-        col.prop(props, 'sideViewResolution')
-        col.prop(props, 'topViewResolution')
-        col.prop(props, 'bottomViewResolution')
+        if props.get_hfov() > props.get_front_fov():
+            col.prop(props, 'sideViewResolution')
+        if props.get_vfov() > props.get_front_fov():
+            col.prop(props, 'topViewResolution')
+            col.prop(props, 'bottomViewResolution')
         if props.get_hfov() > radians(270):
             col.prop(props, 'rearViewResolution')
         if context.scene.render.use_multiview and props.is_top_bottom(context):
