@@ -600,8 +600,8 @@ class Renderer:
             if nameR in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[nameR])
 
-            # If rendering for VR, render the side images separately to avoid seams
             if self.seamless and direction in {'right', 'left'}:
+                # If rendering for VR, render the side images separately to avoid seams
 
                 self.scene.render.use_multiview = False
                 tmp_loc = list(self.camera.location)
