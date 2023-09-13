@@ -590,73 +590,74 @@ class Renderer:
 
         # Render the image and load it into the script
         name = f'temp_img_store_{os.getpid()}_{direction}'
+        tmp = self.scene.render.filepath
+
         if self.is_stereo:
             nameL = name + '_L'
             nameR = name + '_R'
-        tmp = self.scene.render.filepath
         
-        # If rendering for VR, render the side images separately to avoid seams
-        if self.is_stereo and self.seamless and direction in {'right', 'left'}:
-            if nameL in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[nameL])
-            if nameR in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[nameR])
+            # If rendering for VR, render the side images separately to avoid seams
+            if self.seamless and direction in {'right', 'left'}:
+                if nameL in bpy.data.images:
+                    bpy.data.images.remove(bpy.data.images[nameL])
+                if nameR in bpy.data.images:
+                    bpy.data.images.remove(bpy.data.images[nameR])
 
-            self.scene.render.use_multiview = False
-            tmp_loc = list(self.camera.location)
-            camera_angle = self.direction_offsets['front'][2]
-            self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
-                                    tmp_loc[2]]
+                self.scene.render.use_multiview = False
+                tmp_loc = list(self.camera.location)
+                camera_angle = self.direction_offsets['front'][2]
+                self.camera.location = [tmp_loc[0]+(0.5*self.IPD*cos(camera_angle)),\
+                                        tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
+                                        tmp_loc[2]]
 
-            self.scene.render.filepath = self.path + nameL + self.fext
-            bpy.ops.render.render(write_still=True)
-            self.createdFiles.add(self.scene.render.filepath)
-            renderedImageL = bpy.data.images.load(self.scene.render.filepath)
-            renderedImageL.name = nameL
+                self.scene.render.filepath = self.path + nameL + self.fext
+                bpy.ops.render.render(write_still=True)
+                self.createdFiles.add(self.scene.render.filepath)
+                renderedImageL = bpy.data.images.load(self.scene.render.filepath)
+                renderedImageL.name = nameL
+                
+                self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
+                                        tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
+                                        tmp_loc[2]]
+
+                self.scene.render.filepath = self.path + nameR + self.fext
+                bpy.ops.render.render(write_still=True)
+                self.createdFiles.add(self.scene.render.filepath)
+                renderedImageR = bpy.data.images.load(self.scene.render.filepath)
+                renderedImageR.name = nameR
+
+                self.scene.render.use_multiview = True
+                self.camera.location = tmp_loc
             
-            self.camera.location = [tmp_loc[0]-(0.5*self.IPD*cos(camera_angle)),\
-                                    tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
-                                    tmp_loc[2]]
-
-            self.scene.render.filepath = self.path + nameR + self.fext
-            bpy.ops.render.render(write_still=True)
-            self.createdFiles.add(self.scene.render.filepath)
-            renderedImageR = bpy.data.images.load(self.scene.render.filepath)
-            renderedImageR.name = nameR
-
-            self.scene.render.use_multiview = True
-            self.camera.location = tmp_loc
-        
-        elif self.is_stereo:
-            if name in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[name])
-            if nameL in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[nameL])
-            if nameR in bpy.data.images:
-                bpy.data.images.remove(bpy.data.images[nameR])
-            self.scene.render.filepath = self.path + name + self.fext
-            bpy.ops.render.render(write_still=True)
-            self.createdFiles.add(self.scene.render.filepath)
-            renderedImage =  bpy.data.images.load(self.scene.render.filepath)
-            renderedImage.name = name
-            renderedImage.colorspace_settings.name='Linear'
-            imageLen = len(renderedImage.pixels)
-            renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y)
-            renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y)
-            
-            # Split the render into two images
-            buff = np.empty((imageLen,), dtype=np.float32)
-            renderedImage.pixels.foreach_get(buff)
-            if self.seamless and direction == 'back':
-                renderedImageL.pixels.foreach_set(buff[imageLen//2:])
-                renderedImageR.pixels.foreach_set(buff[:imageLen//2])
             else:
-                renderedImageR.pixels.foreach_set(buff[imageLen//2:])
-                renderedImageL.pixels.foreach_set(buff[:imageLen//2])
-            renderedImageL.pack()
-            renderedImageR.pack()
-            bpy.data.images.remove(renderedImage)
+                if name in bpy.data.images:
+                    bpy.data.images.remove(bpy.data.images[name])
+                if nameL in bpy.data.images:
+                    bpy.data.images.remove(bpy.data.images[nameL])
+                if nameR in bpy.data.images:
+                    bpy.data.images.remove(bpy.data.images[nameR])
+                self.scene.render.filepath = self.path + name + self.fext
+                bpy.ops.render.render(write_still=True)
+                self.createdFiles.add(self.scene.render.filepath)
+                renderedImage =  bpy.data.images.load(self.scene.render.filepath)
+                renderedImage.name = name
+                renderedImage.colorspace_settings.name='Linear'
+                imageLen = len(renderedImage.pixels)
+                renderedImageL = bpy.data.images.new(nameL, self.scene.render.resolution_x, self.scene.render.resolution_y)
+                renderedImageR = bpy.data.images.new(nameR, self.scene.render.resolution_x, self.scene.render.resolution_y)
+                
+                # Split the render into two images
+                buff = np.empty((imageLen,), dtype=np.float32)
+                renderedImage.pixels.foreach_get(buff)
+                if self.seamless and direction == 'back':
+                    renderedImageL.pixels.foreach_set(buff[imageLen//2:])
+                    renderedImageR.pixels.foreach_set(buff[:imageLen//2])
+                else:
+                    renderedImageR.pixels.foreach_set(buff[imageLen//2:])
+                    renderedImageL.pixels.foreach_set(buff[:imageLen//2])
+                renderedImageL.pack()
+                renderedImageR.pack()
+                bpy.data.images.remove(renderedImage)
         else:
             if name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[name])
