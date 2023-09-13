@@ -293,9 +293,9 @@ class Renderer:
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         is_dome = props.renderModeEnum == 'DOME'
-        h_fov = props.GetHFOV()
-        v_fov = props.GetVFOV()
-        front_fov = props.GetFrontFOV()
+        h_fov = props.get_hfov()
+        v_fov = props.get_vfov()
+        front_fov = props.get_front_fov()
         ext_front_view = front_fov > pi/2
         render_fov = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(h_fov, v_fov)
         self.no_back_image = h_fov <= 3*pi/2

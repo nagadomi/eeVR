@@ -5,7 +5,7 @@
 import os
 import time
 from datetime import datetime
-from math import radians
+from math import radians, degrees
 
 if "bpy" in locals():
     import importlib
@@ -174,22 +174,23 @@ class ToolPanel(Panel):
         else:
             col.prop(props, 'HFOV360')
         col.prop(props, 'VFOV')
+        if props.get_hfov() <= radians(270):
+            col.prop(props, 'frontFOV')
+            max_fov = props.get_max_fov()
+            if props.frontFOV > max_fov:
+                col.label(icon='ERROR', text=f"clips to {degrees(max_fov):3.0f}°")
         col.prop(props, 'stitchMargin')
         col.prop(props, 'frontViewResolution')
         col.prop(props, 'sideViewResolution')
         col.prop(props, 'topViewResolution')
         col.prop(props, 'bottomViewResolution')
-        col.prop(props, 'rearViewResolution')
-        if props.fovModeEnum == '180':
-            col = layout.column()
-            col.prop(props, 'frontFOV')
-        if context.scene.render.use_multiview and props.GetHFOV() > radians(180):
-            col = layout.column()
+        if props.get_hfov() > radians(270):
+            col.prop(props, 'rearViewResolution')
+        if context.scene.render.use_multiview and props.is_top_bottom(context):
+            col.prop(props, 'isTopRightEye')
+        if context.scene.render.use_multiview and props.get_hfov() > radians(180):
             col.prop(props, 'appliesParallaxForSideAndBack')
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
-        if context.scene.render.use_multiview and (context.scene.render.image_settings.stereo_3d_format.display_mode == 'TOPBOTTOM') if props.cancel else props.trueTopBottom:
-            col = layout.column()
-            col.prop(props, 'isTopRightEye')
         layout.separator()
         col = layout.column()
         col.operator(RenderImage.bl_idname, text="Render Image")
@@ -381,14 +382,23 @@ class Properties(bpy.types.PropertyGroup):
             return radians(360)
         return src
 
-    def GetHFOV(self) -> float:
+    def get_hfov(self) -> float:
         return self.snap_angle(self.HFOV180 if self.fovModeEnum == '180' else self.HFOV360)
 
-    def GetVFOV(self) -> float:
+    def get_vfov(self) -> float:
         return self.snap_angle(self.VFOV)
 
-    def GetFrontFOV(self) -> float:
-        return self.snap_angle(self.frontFOV) if self.fovModeEnum == '180' else radians(90)
+    def get_max_fov(self) -> float:
+        return max(self.get_hfov(), self.get_vfov())
+
+    def get_front_fov(self) -> float:
+        return min(self.snap_angle(self.frontFOV), self.get_max_fov()) if self.get_hfov() <= radians(270) else radians(90)
+
+    def is_top_bottom(self, context: Context) -> bool:
+        if self.cancel:
+            return context.scene.render.image_settings.stereo_3d_format.display_mode =='TOPBOTTOM'
+        else:
+            return self.trueTopBottom
 
     @classmethod
     def register(cls):

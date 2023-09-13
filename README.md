@@ -54,7 +54,7 @@ If the front view FOV is greater than the horizontal FOV, the side view renderin
 the top and bottom views' rendering is omitted. If both conditions are met, the front view rendering occurs only once.
 In this case, the FOV is clipped to whichever is larger between the horizontal and vertical FOVs.
 
-**NOTE** : This feature is active only in VR180 mode.
+**NOTE** : This feature is active only when horizontal FOV is less than 270 degrees.
 
 ### Applies Parallax For Side And Rear
 
