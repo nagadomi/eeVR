@@ -591,6 +591,8 @@ class Renderer:
         # Render the image and load it into the script
         name = f'temp_img_store_{os.getpid()}_{direction}'
         tmp = self.scene.render.filepath
+        tmp_file_format = self.scene.render.image_settings.file_format
+        self.scene.render.image_settings.file_format = 'TARGA_RAW'
 
         if self.is_stereo:
             nameL = name + '_L'
@@ -610,7 +612,7 @@ class Renderer:
                                         tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.path + nameL + self.fext
+                self.scene.render.filepath = self.path + nameL + '.tga'
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -620,7 +622,7 @@ class Renderer:
                                         tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.path + nameR + self.fext
+                self.scene.render.filepath = self.path + nameR + '.tga'
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageR = bpy.data.images.load(self.scene.render.filepath)
@@ -636,7 +638,7 @@ class Renderer:
                     bpy.data.images.remove(bpy.data.images[nameL])
                 if nameR in bpy.data.images:
                     bpy.data.images.remove(bpy.data.images[nameR])
-                self.scene.render.filepath = self.path + name + self.fext
+                self.scene.render.filepath = self.path + name + '.tga'
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImage =  bpy.data.images.load(self.scene.render.filepath)
@@ -662,7 +664,7 @@ class Renderer:
             if name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[name])
 
-            self.scene.render.filepath = self.path + name + self.fext
+            self.scene.render.filepath = self.path + name + '.tga'
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -670,6 +672,7 @@ class Renderer:
             renderedImageR = None
         
         self.scene.render.filepath = tmp
+        self.scene.render.image_settings.file_format = tmp_file_format
         return renderedImageL, renderedImageR
     
     
