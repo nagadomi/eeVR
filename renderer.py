@@ -720,7 +720,7 @@ class Renderer:
         if self.is_animation:
             image_name = f"frame{self.scene.frame_current:06d}{self.fext}"
         else:
-            image_name = f"Render Result {self.start_time}{self.fext}"
+            image_name = f"{os.path.splitext(bpy.path.basename(bpy.data.filepath))[0]} {self.start_time}{self.fext}"
 
         start_time = time.time()
         # Convert the rendered images to equirectangular projection image and save it to the disk

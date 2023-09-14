@@ -111,8 +111,8 @@ class RenderAnimation(Operator):
 
         # knowing it's animation, creates folder outside vrrender class, pass folder name to it
         start_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        folder_name = f"Render Result {start_time}/"
-        path = bpy.path.abspath("//")
+        folder_name = f"{os.path.splitext(bpy.path.basename(bpy.data.filepath))[0]} {start_time}/"
+        path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
         os.makedirs(path+folder_name, exist_ok=True)
         self.renderer = Renderer(context, True, folder_name)
         
