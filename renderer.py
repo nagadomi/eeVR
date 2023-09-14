@@ -257,7 +257,7 @@ void main() {
 
 class Renderer:
     
-    def __init__(self, context, is_animation = False, folder = ''):
+    def __init__(self, context : bpy.types.Context, is_animation = False, folder = ''):
         
         # Check if the file is saved or not, can cause errors when not saved
         if not bpy.data.is_saved:
@@ -289,7 +289,8 @@ class Renderer:
         # transfer clip_start & clip_end parameter to new camera
         self.camera.data.clip_start = self.camera_origin.data.clip_start
         self.camera.data.clip_end = self.camera_origin.data.clip_end
-        self.path = bpy.path.abspath("//")
+        self.path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
+        self.tmpdir = bpy.path.abspath(context.preferences.filepaths.temporary_directory)
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         is_dome = props.renderModeEnum == 'DOME'
@@ -582,7 +583,10 @@ class Renderer:
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
         if not context.preferences.addons[__package__].preferences.remain_temporaries:
             for filename in self.createdFiles:
-                os.remove(filename)
+                try:
+                    os.remove(filename)
+                except Exception as e:
+                    print('at remove temporary file.', e)
         self.createdFiles.clear()
     
     
@@ -612,7 +616,7 @@ class Renderer:
                                         tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.path + nameL + '.tga'
+                self.scene.render.filepath = self.tmpdir + nameL + '.tga'
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -622,8 +626,9 @@ class Renderer:
                                         tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.path + nameR + '.tga'
+                self.scene.render.filepath = self.tmpdir + nameR + '.tga'
                 bpy.ops.render.render(write_still=True)
+                print(self.scene.render.filepath)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageR = bpy.data.images.load(self.scene.render.filepath)
                 renderedImageR.name = nameR
@@ -638,7 +643,7 @@ class Renderer:
                     bpy.data.images.remove(bpy.data.images[nameL])
                 if nameR in bpy.data.images:
                     bpy.data.images.remove(bpy.data.images[nameR])
-                self.scene.render.filepath = self.path + name + '.tga'
+                self.scene.render.filepath = self.tmpdir + name + '.tga'
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImage =  bpy.data.images.load(self.scene.render.filepath)
@@ -664,7 +669,7 @@ class Renderer:
             if name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[name])
 
-            self.scene.render.filepath = self.path + name + '.tga'
+            self.scene.render.filepath = self.tmpdir + name + '.tga'
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
