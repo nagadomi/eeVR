@@ -28,20 +28,13 @@ Final Image
 
 ### Resolution scales per view
 
-The resolution is calculated so that the angle of view of each camera (front, back, top, bottom, and side) fits the final rendering resolution,
-but in this case the panorama is stretched and the front center is not resolved enough.
+The resolution is calculated so that the angle of view of each camera (front, back, top, bottom, and side) fits the final rendering resolution.
 
-The resolution can be increased by this amount only for the frontal rendering to compensate for the lack of resolution.
+There is no shortage of resolution, but it's slightly excessive. Setting it to around 90% doesn't result in a noticeable lack of resolution.
 
-The default setting of 125% almost eliminates the lack of resolution in the center of the image,
-but it results in excessive resolution on the periphery.
+To reduce rendering time, it's advisable to specify the lowest possible resolution for non-front-facing renderings with lower importance.
 
-This means that rendering will take more time.
-
-Meanwhile, To reduce rendering time, you can specify the reduction percentage of the rendering resolution for views other than the front view,
-where their importance is lower.
-
-You can set it from 1% to a maximum of 200% reduction.
+You can set it from 1% to a maximum of 100% reduction.
 
 ### Front View FOV
 

@@ -319,11 +319,6 @@ class Renderer:
         scale = self.resolution_percentage_origin / 100.0
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
 
-        # Generate fragment shader code
-        fovfrac = 0.5 if props.fovModeEnum == '180' else 1 if props.fovModeEnum == '360' else max(h_fov, v_fov) / (2*pi)
-        sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
-        tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
-
         coeff = 1 / sin(pi/4)
         if props.fovModeEnum == '180':
             resolution_rate = (0.5 * coeff, 0.5 * coeff)
@@ -334,7 +329,15 @@ class Renderer:
         else:
             resolution_rate = ((pi/2) / h_fov * coeff, (pi/2) / v_fov * coeff)
 
-        base_resolution = (int(ceil(self.image_size[0] * resolution_rate[0])), int(ceil(self.image_size[1] * resolution_rate[1])))
+        base_resolution = (
+            int(ceil(self.image_size[0] * resolution_rate[0])),
+            int(ceil(self.image_size[1] * resolution_rate[1]))
+        )
+
+        # Generate fragment shader code
+        fovfrac = 0.5 if props.fovModeEnum == '180' else 1 if props.fovModeEnum == '360' else max(h_fov, v_fov) / (2*pi)
+        sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
+        tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
 
         base_angle = min(h_fov, front_fov)
         
