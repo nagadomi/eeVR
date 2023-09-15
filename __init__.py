@@ -295,57 +295,57 @@ class Properties(bpy.types.PropertyGroup):
     )
 
     frontViewResolution: bpy.props.FloatProperty(
-        name="Front View Resolution Scale",
+        name="Front View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
-        default=125,
+        default=100,
         min=1,
-        max=200,
+        max=100,
         description="Overscan/Reduction Rate for Front View Rendering",
     )
 
     sideViewResolution: bpy.props.FloatProperty(
-        name="Side View Resolution Scale",
+        name="Side View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
         default=100,
         min=1,
-        max=200,
+        max=100,
         description="Overscan/Reduction Rate for Side View Rendering",
     )
 
     topViewResolution: bpy.props.FloatProperty(
-        name="Top View Resolution Scale",
+        name="Top View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
         default=100,
         min=1,
-        max=200,
+        max=100,
         description="Overscan/Reduction Rate for Top View Rendering",
     )
 
     bottomViewResolution: bpy.props.FloatProperty(
-        name="Bottom View Resolution Scale",
+        name="Bottom View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
         default=100,
         min=1,
-        max=200,
+        max=100,
         description="Overscan/Reduction Rate for Bottom View Rendering",
     )
 
     rearViewResolution: bpy.props.FloatProperty(
-        name="Rear View Resolution Scale",
+        name="Rear View Resolution",
         subtype='PERCENTAGE',
         precision=0,
         step=100,
         default=100,
         min=1,
-        max=200,
+        max=100,
         description="Overscan/Reduction Rate for Rear View Rendering",
     )
 
@@ -418,14 +418,24 @@ class Preferences(bpy.types.AddonPreferences):
     # when defining this in a submodule of a python package.
     bl_idname = __name__
 
-    remain_temporaries: bpy.props.BoolProperty(
+    remain_temporalies: bpy.props.BoolProperty(
         name='Remain temporal work files',
         description='Temporal rendering images will not be removed.',
         default=False
     )
 
+    temporal_file_format: bpy.props.EnumProperty(
+        items=[
+            ("PNG", "PNG", "Output image in PNG format."),
+            ("TARGA_RAW", "Targa Raw", "Output image in uncompressed Targa format."),
+        ],
+        default="TARGA_RAW",
+        name="Temporal File Format",
+    )
+
     def draw(self, context):
-        self.layout.row().prop(self, 'remain_temporaries')
+        self.layout.row().prop(self, 'remain_temporalies')
+        self.layout.row().prop(self, 'temporal_file_format')
 
 
 # REGISTER

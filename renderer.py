@@ -9,6 +9,7 @@ from gpu_extras.batch import batch_for_shader
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from . import Properties
+    from . import Preferences
 
 # Define parts of fragment shader 
 commdef = '''
@@ -264,6 +265,7 @@ class Renderer:
             raise PermissionError("Save file before rendering")
         
         props: Properties = context.scene.eeVR
+        self.preferences: Preferences = context.preferences.addons[__package__].preferences
 
         # Set internal variables for the class
         self.scene = context.scene
@@ -291,6 +293,8 @@ class Renderer:
         self.camera.data.clip_end = self.camera_origin.data.clip_end
         self.path = bpy.path.abspath(context.preferences.filepaths.render_output_directory)
         self.tmpdir = bpy.path.abspath(context.preferences.filepaths.temporary_directory)
+        self.tmpfile_format = self.preferences.temporal_file_format
+        self.tmpfext = '.tga' if self.tmpfile_format == 'TARGA_RAW' else '.png'
         self.is_stereo = context.scene.render.use_multiview
         self.is_animation = is_animation
         is_dome = props.renderModeEnum == 'DOME'
@@ -298,7 +302,6 @@ class Renderer:
         v_fov = props.get_vfov()
         front_fov = props.get_front_fov()
         ext_front_view = front_fov > pi/2
-        render_fov = pi if props.fovModeEnum == '180' else 2 * pi if props.fovModeEnum == '360' else max(h_fov, v_fov)
         self.no_back_image = h_fov <= 3*pi/2
         self.no_side_images = h_fov <= front_fov
         self.no_top_bottom_images = v_fov <= front_fov
@@ -315,16 +318,54 @@ class Renderer:
 
         scale = self.resolution_percentage_origin / 100.0
         self.image_size = int(ceil(self.scene.render.resolution_x * scale)), int(ceil(self.scene.render.resolution_y * scale))
-        base_resolution = (
-            int(ceil(self.image_size[0] * (pi/2 / render_fov))),
-            int(ceil(self.image_size[1] * (pi/2 / min(2*pi if is_dome else pi, render_fov))))
-        )
-        
+
         # Generate fragment shader code
-        fovfrac = render_fov / (2*pi)
+        fovfrac = 0.5 if props.fovModeEnum == '180' else 1 if props.fovModeEnum == '360' else max(h_fov, v_fov) / (2*pi)
         sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
-        
+
+        if is_dome:
+            match props.domeMethodEnum:
+                case '0':  # Equidistant (VTA)
+                    if props.fovModeEnum == '180':
+                        coeff = 0.5 / sin(pi/4)
+                    elif props.fovModeEnum == '360':
+                        coeff = 0.25 / sin(pi/4)
+                    else:
+                        coeff = (pi/2) / max(h_fov, v_fov) / sin(pi/4)
+                case '1':  # Hemispherical (VTH)
+                    if props.fovModeEnum == '180':
+                        coeff = 0.5 / sin(pi/4)
+                    elif props.fovModeEnum == '360':
+                        coeff = 0.25 / sin(pi/4)
+                    else:
+                        coeff = (pi/2) / max(h_fov, v_fov)
+                case '2':  # Equisolid
+                    if props.fovModeEnum == '180':
+                        coeff = 0.5 / sin(pi/4)
+                    elif props.fovModeEnum == '360':
+                        coeff = 0.25 / sin(pi/4)
+                    else:
+                        coeff = (pi/2) / max(h_fov, v_fov)
+                case '3':  # Stereographic
+                    if props.fovModeEnum == '180':
+                        coeff = 0.5 / sin(pi/4)
+                    elif props.fovModeEnum == '360':
+                        coeff = 0.25 / sin(pi/4)
+                    else:
+                        coeff = (pi/2) / max(h_fov, v_fov)
+            resolution_rate = (coeff, coeff)
+        else:
+            coeff = 1 / sin(pi/4)
+            if props.fovModeEnum == '180':
+                resolution_rate = (0.5 * coeff, 0.5 * coeff)
+            elif props.fovModeEnum == '360':
+                resolution_rate = (0.25 * coeff, 0.5 * coeff)
+            else:
+                resolution_rate = ((pi/2) / h_fov * coeff, (pi/2) / v_fov * coeff)
+
+        base_resolution = (int(ceil(self.image_size[0] * resolution_rate[0])), int(ceil(self.image_size[1] * resolution_rate[1])))
+
         base_angle = min(h_fov, front_fov)
         
         stitch_margin = 0.0 if self.no_side_images and self.no_top_bottom_images else props.stitchMargin
@@ -581,7 +622,7 @@ class Renderer:
         if self.is_stereo:
             self.scene.render.image_settings.views_format = self.view_format
             self.scene.render.image_settings.stereo_3d_format.display_mode = self.stereo_mode
-        if not context.preferences.addons[__package__].preferences.remain_temporaries:
+        if not self.preferences.remain_temporalies:
             for filename in self.createdFiles:
                 try:
                     os.remove(filename)
@@ -594,9 +635,9 @@ class Renderer:
 
         # Render the image and load it into the script
         name = f'temp_img_store_{os.getpid()}_{direction}'
-        tmp = self.scene.render.filepath
-        tmp_file_format = self.scene.render.image_settings.file_format
-        self.scene.render.image_settings.file_format = 'TARGA_RAW'
+        org_filepath = self.scene.render.filepath
+        org_file_format = self.scene.render.image_settings.file_format
+        self.scene.render.image_settings.file_format = self.tmpfile_format
 
         if self.is_stereo:
             nameL = name + '_L'
@@ -616,7 +657,7 @@ class Renderer:
                                         tmp_loc[1]+(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.tmpdir + nameL + '.tga'
+                self.scene.render.filepath = self.tmpdir + nameL + self.tmpfext
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImageL = bpy.data.images.load(self.scene.render.filepath)
@@ -626,7 +667,7 @@ class Renderer:
                                         tmp_loc[1]-(0.5*self.IPD*sin(camera_angle)),\
                                         tmp_loc[2]]
 
-                self.scene.render.filepath = self.tmpdir + nameR + '.tga'
+                self.scene.render.filepath = self.tmpdir + nameR + self.tmpfext
                 bpy.ops.render.render(write_still=True)
                 print(self.scene.render.filepath)
                 self.createdFiles.add(self.scene.render.filepath)
@@ -643,7 +684,7 @@ class Renderer:
                     bpy.data.images.remove(bpy.data.images[nameL])
                 if nameR in bpy.data.images:
                     bpy.data.images.remove(bpy.data.images[nameR])
-                self.scene.render.filepath = self.tmpdir + name + '.tga'
+                self.scene.render.filepath = self.tmpdir + name + self.tmpfext
                 bpy.ops.render.render(write_still=True)
                 self.createdFiles.add(self.scene.render.filepath)
                 renderedImage =  bpy.data.images.load(self.scene.render.filepath)
@@ -669,15 +710,15 @@ class Renderer:
             if name in bpy.data.images:
                 bpy.data.images.remove(bpy.data.images[name])
 
-            self.scene.render.filepath = self.tmpdir + name + '.tga'
+            self.scene.render.filepath = self.tmpdir + name + self.tmpfext
             bpy.ops.render.render(write_still=True)
             self.createdFiles.add(self.scene.render.filepath)
             renderedImageL = bpy.data.images.load(self.scene.render.filepath)
             renderedImageL.name = name
             renderedImageR = None
         
-        self.scene.render.filepath = tmp
-        self.scene.render.image_settings.file_format = tmp_file_format
+        self.scene.render.filepath = org_filepath
+        self.scene.render.image_settings.file_format = org_file_format
         return renderedImageL, renderedImageR
     
     
