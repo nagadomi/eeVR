@@ -324,45 +324,15 @@ class Renderer:
         sidefrac = max(0, min(1, (h_fov - pi/2) / pi))
         tbfrac = max(sidefrac, max(0, min(1, (v_fov - pi/2) / pi)))
 
-        if is_dome:
-            match props.domeMethodEnum:
-                case '0':  # Equidistant (VTA)
-                    if props.fovModeEnum == '180':
-                        coeff = 0.5 / sin(pi/4)
-                    elif props.fovModeEnum == '360':
-                        coeff = 0.25 / sin(pi/4)
-                    else:
-                        coeff = (pi/2) / max(h_fov, v_fov) / sin(pi/4)
-                case '1':  # Hemispherical (VTH)
-                    if props.fovModeEnum == '180':
-                        coeff = 0.5 / sin(pi/4)
-                    elif props.fovModeEnum == '360':
-                        coeff = 0.25 / sin(pi/4)
-                    else:
-                        coeff = (pi/2) / max(h_fov, v_fov)
-                case '2':  # Equisolid
-                    if props.fovModeEnum == '180':
-                        coeff = 0.5 / sin(pi/4)
-                    elif props.fovModeEnum == '360':
-                        coeff = 0.25 / sin(pi/4)
-                    else:
-                        coeff = (pi/2) / max(h_fov, v_fov)
-                case '3':  # Stereographic
-                    if props.fovModeEnum == '180':
-                        coeff = 0.5 / sin(pi/4)
-                    elif props.fovModeEnum == '360':
-                        coeff = 0.25 / sin(pi/4)
-                    else:
-                        coeff = (pi/2) / max(h_fov, v_fov)
-            resolution_rate = (coeff, coeff)
+        coeff = 1 / sin(pi/4)
+        if props.fovModeEnum == '180':
+            resolution_rate = (0.5 * coeff, 0.5 * coeff)
+        elif props.fovModeEnum == '360':
+            resolution_rate = (0.25 * coeff, (0.5 if is_dome else 0.25) * coeff)
+        elif is_dome:
+            resolution_rate = ((pi/2) / max(h_fov, v_fov) * coeff, (pi/2) / max(h_fov, v_fov) * coeff)
         else:
-            coeff = 1 / sin(pi/4)
-            if props.fovModeEnum == '180':
-                resolution_rate = (0.5 * coeff, 0.5 * coeff)
-            elif props.fovModeEnum == '360':
-                resolution_rate = (0.25 * coeff, 0.5 * coeff)
-            else:
-                resolution_rate = ((pi/2) / h_fov * coeff, (pi/2) / v_fov * coeff)
+            resolution_rate = ((pi/2) / h_fov * coeff, (pi/2) / v_fov * coeff)
 
         base_resolution = (int(ceil(self.image_size[0] * resolution_rate[0])), int(ceil(self.image_size[1] * resolution_rate[1])))
 
