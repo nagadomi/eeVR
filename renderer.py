@@ -161,12 +161,8 @@ fetch_setup = '''
 '''
 
 fetch_top_bottom = '''
-    {
-        vec2 uv = to_uv_top(pt);
-        fragColor += tob * up * (step(0, uv.y)) * texture(cubeTopImage, uv);
-        uv = to_uv_bottom(pt);
-        fragColor += tob * (1 - up) * (step(uv.y, 1)) * texture(cubeBottomImage, uv);
-    }
+    fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
+    fragColor += tob * (1 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
 '''
 
 fetch_sides = '''
