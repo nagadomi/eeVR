@@ -36,6 +36,9 @@ def has_invalid_condition(self : 'Operator', context : 'Context'):
     if context.scene.camera == None:
         self.report({'ERROR'}, "eeVR ERROR : Scene camera is not set.")
         return True
+    if context.active_object.mode != 'OBJECT':
+        self.report({'ERROR'}, "eeVR ERROR : Active object's mode is not object mode.")
+        return True
     return False
 
 
