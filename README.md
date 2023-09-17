@@ -34,7 +34,7 @@ There is no shortage of resolution, but it's slightly excessive. Setting it to a
 
 To reduce rendering time, it's advisable to specify the lowest possible resolution for non-front-facing renderings with lower importance.
 
-You can set it from 1% to a maximum of 100% reduction.
+You can set it from 1% to a maximum of 100%.
 
 ### Front View FOV
 

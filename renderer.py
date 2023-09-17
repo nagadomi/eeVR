@@ -161,15 +161,21 @@ fetch_setup = '''
 '''
 
 fetch_top_bottom = '''
-    fragColor += tob * up * texture(cubeTopImage, to_uv_top(pt));
-    fragColor += tob * (1 - up) * texture(cubeBottomImage, to_uv_bottom(pt));
+    {
+        vec2 uv = to_uv_top(pt);
+        fragColor += tob * up * (step(0, uv.y)) * texture(cubeTopImage, uv);
+        uv = to_uv_bottom(pt);
+        fragColor += tob * (1 - up) * (step(uv.y, 1)) * texture(cubeBottomImage, uv);
+    }
 '''
 
 fetch_sides = '''
     vec2 right_uv = to_uv_right(pt);
-    fragColor += lor * right * texture(cubeRightImage, right_uv);
+    float right_inner = step(0, right_uv.x);
+    fragColor += lor * right * right_inner * texture(cubeRightImage, right_uv);
     vec2 left_uv = to_uv_left(pt);
-    fragColor += lor * (1 - right) * texture(cubeLeftImage, left_uv);
+    float left_inner = step(left_uv.x, 1);
+    fragColor += lor * (1 - right) * left_inner * texture(cubeLeftImage, left_uv);
 '''
 
 blend_seam_sides = '''
@@ -177,15 +183,19 @@ blend_seam_sides = '''
         float range = over45 * (1 - over135);
         
         float alpha = range * right * tob * up * smoothstep(1.0, 0.0, clamp((right_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
+        alpha *= right_inner;
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
         alpha = range * right * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(right_uv.y / ACTUALVMARGIN, 0.0, 1.0));
+        alpha *= right_inner;
         fragColor = mix(fragColor, texture(cubeRightImage, right_uv), alpha);
 
         alpha = range * (1 - right) * tob * up * smoothstep(1.0, 0.0, clamp((left_uv.y - 1 + ACTUALVMARGIN) / ACTUALVMARGIN, 0.0, 1.0));
+        alpha *= left_inner;
         fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
 
         alpha = range * (1 - right) * tob * (1 - up) * smoothstep(0.0, 1.0, clamp(left_uv.y / ACTUALVMARGIN, 0.0, 1.0));
+        alpha *= left_inner;
         fragColor = mix(fragColor, texture(cubeLeftImage, left_uv), alpha);
     }
 '''
@@ -405,15 +415,15 @@ class Renderer:
         # setup render targets information
         aspect_ratio = base_resolution[0] / base_resolution[1]
 
-        def make_resolution(src, hscale, vscale, hmargin, vmargin, scale):
-            return int(ceil((src[0] * hscale + 2 * hmargin * src[0]) * scale)),\
-                int(ceil((src[1] * vscale + 2 * vmargin * src[1]) * scale))
+        def make_resolution(hscale, vscale, hmargin, vmargin, scale):
+            return int(ceil((base_resolution[0] * hscale + 2 * hmargin * base_resolution[0]) * scale)),\
+                int(ceil((base_resolution[1] * vscale + 2 * vmargin * base_resolution[1]) * scale))
 
-        f_resolution = make_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin, props.frontViewResolution / 100.0)
-        b_resolution = make_resolution(base_resolution, 1, 1, extrusion+hmargin, extrusion+vmargin, props.rearViewResolution / 100.0)
-        side_resolution = make_resolution(base_resolution, sidefrac-intrusion, 1, 0, smargin, props.sideViewResolution / 100.0)
-        top_resolution = make_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0, props.topViewResolution / 100.0)
-        bot_resolution = make_resolution(base_resolution, 1, tbfrac-intrusion, 0, 0, props.bottomViewResolution / 100.0)
+        f_resolution = make_resolution(1, 1, extrusion+hmargin, extrusion+vmargin, props.frontViewResolution / 100.0)
+        b_resolution = make_resolution(1, 1, extrusion+hmargin, extrusion+vmargin, props.rearViewResolution / 100.0)
+        side_resolution = make_resolution(sidefrac-intrusion, 1, 0, smargin, props.sideViewResolution / 100.0)
+        top_resolution = make_resolution(1, tbfrac-intrusion, 0, 0, props.topViewResolution / 100.0)
+        bot_resolution = make_resolution(1, tbfrac-intrusion, 0, 0, props.bottomViewResolution / 100.0)
 
         fb_angle = base_angle + 2 * stitch_margin
         side_angle = pi/2 + ((2 * stitch_margin) if smargin > 0.0 else 0.0)
@@ -502,7 +512,17 @@ class Renderer:
                 else:
                     if not self.no_back_image:
                         self.shader.uniform_sampler("cubeBackImage", textures[3])
-            
+
+            # new 'gpu' api has no method for setting a TexParamter...
+            # black_color = bgl.Buffer(bgl.GL_FLOAT, [4])
+            # for tex in [bgl.GL_TEXTURE0, bgl.GL_TEXTURE1, bgl.GL_TEXTURE2, bgl.GL_TEXTURE3, bgl.GL_TEXTURE4, bgl.GL_TEXTURE5, bgl.GL_TEXTURE6]:
+            #     bgl.glActiveTexture(tex)
+            #     bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MIN_FILTER, bgl.GL_LINEAR)
+            #     bgl.glTexParameterf(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_MAG_FILTER, bgl.GL_LINEAR)
+            #     bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_S, bgl.GL_CLAMP_TO_BORDER)
+            #     bgl.glTexParameteri(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_WRAP_T, bgl.GL_CLAMP_TO_BORDER)
+            #     bgl.glTexParameterfv(bgl.GL_TEXTURE_2D, bgl.GL_TEXTURE_BORDER_COLOR, black_color)
+
             # Render the image
             batch.draw(self.shader)
 
