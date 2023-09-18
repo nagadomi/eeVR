@@ -284,7 +284,14 @@ class Renderer:
         self.camera_origin = context.scene.camera
         # create a new camera for rendering
         bpy.ops.object.camera_add()
-        self.camera = context.object
+        if context.object:
+            self.camera = context.object
+        else:
+            # camera_add in render contect don't set context.object by new camera...
+            if context.active_object and context.active_object.type == 'CAMERA':
+                self.camera = context.active_object
+            else:
+                raise PermissionError("Script cannot handle added temporal camera")
         self.camera.name = 'eeVR_camera'
         # set new cam active
         context.scene.camera = self.camera

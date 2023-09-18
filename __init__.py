@@ -22,9 +22,9 @@ bl_info = {
     "name": "eeVR",
     "description": "Render in different projections using Eevee engine",
     "author": "EternalTrail, SAMtak",
-    "version": (0, 9, 0),
+    "version": (1, 0, 0),
     "blender": (3, 6, 0),
-    "location": "View3D > Tool Tab (Available when EEVEE or Workbench)",
+    "location": "Properties > Render Tab (Available when EEVEE or Workbench)",
     "wiki_url": "https://github.com/EternalTrail/eeVR",
     "tracker_url": "https://github.com/SAM-tak/eeVR/issues",
     "support": "COMMUNITY",
@@ -147,15 +147,17 @@ class Cancel(Operator):
         return {'FINISHED'}
 
 
-class ToolPanel(Panel):
-    """Tool panel for VR rendering"""
+class RenderPanel(Panel):
+    """Render panel for VR rendering"""
 
-    bl_idname = "EEVR_PT_tool"
+    bl_idname = "EEVR_PT_render"
     bl_label = "eeVR"
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "Tool"
-
+    bl_space_type = 'PROPERTIES'
+    bl_region_type = 'WINDOW'
+    bl_context = "render"
+    bl_category = "eeVR"
+    bl_options = {'DEFAULT_CLOSED'}
+    
     COMPAT_ENGINES = {'BLENDER_RENDER', 'BLENDER_EEVEE', 'BLENDER_WORKBENCH'}
 
     @classmethod
@@ -198,8 +200,8 @@ class ToolPanel(Panel):
             col.label(icon='ERROR', text="eeVR cannot support stereo over 180° fov correctly.")
         layout.separator()
         col = layout.column()
-        col.operator(RenderImage.bl_idname, text="Render Image")
-        col.operator(RenderAnimation.bl_idname, text="Render Animation")
+        col.operator(RenderImage.bl_idname, icon="RENDER_STILL", text="Render Image")
+        col.operator(RenderAnimation.bl_idname, icon="RENDER_ANIMATION", text="Render Animation")
         if not props.cancel:
             col.operator(Cancel.bl_idname, text="Cancel")
             col.label(text=f"Rendering frame {context.scene.frame_current}")
@@ -444,7 +446,7 @@ class Preferences(bpy.types.AddonPreferences):
 # REGISTER
 register, unregister = bpy.utils.register_classes_factory((
     Properties,
-    ToolPanel,
+    RenderPanel,
     RenderImage,
     RenderAnimation,
     Cancel,
