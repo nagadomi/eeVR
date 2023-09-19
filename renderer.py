@@ -38,19 +38,9 @@ vec2 tr(vec2 src, vec2 offset, vec2 scale)
     return (src + offset) * scale;
 }
 
-vec2 tr(vec2 src, vec2 offset, float scale)
-{
-    return (src + offset) * scale;
-}
-
-vec2 tr(vec2 src, float offset, float scale)
-{
-    return tr(src, vec2(offset, offset), scale);
-}
-
 vec2 to_uv(float x, float y)
 {
-    return tr(vec2(x, y), 1.0, 0.5);
+    return vec2(0.5 * x + 0.5, 0.5 * y + 0.5);
 }
 
 vec2 to_uv_right(vec3 pt)
